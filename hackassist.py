@@ -20,6 +20,8 @@ from ui import (console, show_banner, show_disclaimer, show_menu,
 from session import get_session_menu
 from tool_manager import show_manager_menu
 from stages import recon, scanning, enumeration, exploitation, post_exploit, reporting
+import auto_attack
+import defender
 
 
 def main():
@@ -46,6 +48,13 @@ def main():
             console.print(f"[bold green]  HACKASSIST MAIN MENU{target_display}[/bold green]")
             console.print("[bold green]=" * 50 + "[/bold green]\n")
 
+            # Show defense status if running
+            defense_engine = defender.get_engine()
+            if defense_engine.running:
+                ds = defense_engine.get_status()
+                console.print(f"  [bold green]SHIELD ACTIVE[/bold green] [dim]| "
+                              f"Uptime: {ds['uptime']} | Threats: {ds['threats_detected']}[/dim]\n")
+
             options = [
                 ("1", "[bold]Recon[/bold]           - Passive & active information gathering"),
                 ("2", "[bold]Scanning[/bold]        - Port scanning & service detection"),
@@ -55,6 +64,8 @@ def main():
                 ("6", "[bold]Reporting[/bold]       - Generate engagement report"),
                 ("7", "[bold]Tool Manager[/bold]    - Check & install hacking tools"),
                 ("8", "[bold]Session[/bold]         - Manage engagement sessions"),
+                ("9", "[bold red]Auto Attack[/bold red]    - AI autonomous attack pipeline"),
+                ("10", "[bold green]Defense[/bold green]        - Autonomous system protection"),
                 ("0", "Exit"),
             ]
             choice = show_menu(options)
@@ -83,6 +94,12 @@ def main():
                 else:
                     warning("Running without a session.")
                 console.print()
+            elif choice == "9":
+                result_session = auto_attack.run(session)
+                if result_session and not session:
+                    session = result_session
+            elif choice == "10":
+                defender.run(session)
 
     except KeyboardInterrupt:
         console.print("\n\n[bold yellow]Interrupted. Exiting HackAssist...[/bold yellow]\n")
