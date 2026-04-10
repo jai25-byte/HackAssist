@@ -285,3 +285,105 @@ PRIV_ESC_CHECKLIST = {
         "powershell Get-Process  (Running processes)",
     ],
 }
+
+# ─── Footprint Erasure Knowledge Base ─────────────────────────────────────────
+
+STAGES["footprint_erasure"] = {
+    "name": "Footprint Erasure",
+    "description": """Footprint erasure is the **final phase** of a penetration test where you
+**remove all evidence** of your activity from the target system.
+
+**Why it matters:**
+- Authorized pentests require cleanup to leave systems in original state
+- In CTFs, covering tracks is often part of the challenge
+- Understanding anti-forensics helps defenders detect attackers
+
+**Key areas to clean:**
+- System logs (auth, syslog, event viewer)
+- Shell history (bash, zsh, PowerShell)
+- Web server access/error logs
+- SSH artifacts (known_hosts, authorized_keys)
+- Uploaded tools and scripts
+- File timestamps (timestomping)
+- Network artifacts (ARP cache, DNS cache, firewall rules)""",
+    "tips": [
+        "Always clean up BEFORE disconnecting from target",
+        "Remove specific log lines (your IP) rather than wiping entire logs — empty logs are suspicious",
+        "Timestomp modified files to match surrounding files",
+        "Securely delete files (shred/rm -P) — don't just rm",
+        "Clear in-memory history (history -c) as well as on-disk files",
+        "Remove any SSH keys or credentials you added",
+        "Flush DNS and ARP caches to remove connection evidence",
+        "Check for .bash_history, .zsh_history, .python_history, .mysql_history, .lesshst, .viminfo",
+        "Don't forget /var/log/wtmp, /var/log/btmp, /var/log/lastlog",
+        "In a real pentest, document what you cleaned for the report BEFORE cleaning",
+    ],
+}
+
+ANTI_FORENSICS = {
+    "linux": [
+        ("Clear auth log", "cat /dev/null > /var/log/auth.log"),
+        ("Clear syslog", "cat /dev/null > /var/log/syslog"),
+        ("Clear kernel log", "cat /dev/null > /var/log/kern.log"),
+        ("Clear daemon log", "cat /dev/null > /var/log/daemon.log"),
+        ("Clear messages", "cat /dev/null > /var/log/messages"),
+        ("Clear wtmp (login records)", "cat /dev/null > /var/log/wtmp"),
+        ("Clear btmp (failed logins)", "cat /dev/null > /var/log/btmp"),
+        ("Clear lastlog", "cat /dev/null > /var/log/lastlog"),
+        ("Clear journal logs", "journalctl --flush --rotate && journalctl --vacuum-time=1s"),
+        ("Remove specific IP from auth.log", "sed -i '/{ip}/d' /var/log/auth.log"),
+        ("Remove specific IP from syslog", "sed -i '/{ip}/d' /var/log/syslog"),
+        ("Clear bash history", "cat /dev/null > ~/.bash_history && history -c"),
+        ("Clear zsh history", "cat /dev/null > ~/.zsh_history"),
+        ("Clear all shell histories", "rm -f ~/.bash_history ~/.zsh_history ~/.python_history ~/.mysql_history ~/.lesshst ~/.viminfo"),
+        ("Unset history file", "unset HISTFILE"),
+        ("Disable history for session", "export HISTSIZE=0"),
+        ("Clear /tmp artifacts", "rm -rf /tmp/.* /tmp/* 2>/dev/null"),
+        ("Clear cron evidence", "crontab -r"),
+        ("Overwrite free disk space", "dd if=/dev/zero of=/tmp/zero bs=1M; rm -f /tmp/zero"),
+        ("Remove SUID binaries you planted", "find / -user $(whoami) -perm -4000 2>/dev/null"),
+    ],
+    "windows": [
+        ("Clear System event log", "wevtutil cl System"),
+        ("Clear Security event log", "wevtutil cl Security"),
+        ("Clear Application event log", "wevtutil cl Application"),
+        ("Clear PowerShell event log", "wevtutil cl 'Windows PowerShell'"),
+        ("Clear all event logs", "for /F \"tokens=*\" %1 in ('wevtutil.exe el') DO wevtutil.exe cl \"%1\""),
+        ("Clear PowerShell history", "del (Get-PSReadlineOption).HistorySavePath"),
+        ("Clear recent files", "del /F /Q %APPDATA%\\Microsoft\\Windows\\Recent\\*"),
+        ("Clear prefetch", "del /F /Q C:\\Windows\\Prefetch\\*"),
+        ("Clear thumbnail cache", "del /F /Q %LOCALAPPDATA%\\Microsoft\\Windows\\Explorer\\thumbcache_*"),
+        ("Clear RDP connection cache", "reg delete \"HKCU\\Software\\Microsoft\\Terminal Server Client\\Default\" /va /f"),
+        ("Clear Run dialog history", "reg delete \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\RunMRU\" /va /f"),
+        ("Clear DNS cache", "ipconfig /flushdns"),
+        ("Disable Windows Defender logging", "Set-MpPreference -DisableRealtimeMonitoring $true"),
+        ("Clear temp files", "del /F /S /Q %TEMP%\\*"),
+        ("Timestomp a file (PowerShell)", "(Get-Item file.txt).LastWriteTime = '01/01/2024 12:00:00'"),
+    ],
+    "webserver": [
+        ("Clear Apache access log", "cat /dev/null > /var/log/apache2/access.log"),
+        ("Clear Apache error log", "cat /dev/null > /var/log/apache2/error.log"),
+        ("Clear Nginx access log", "cat /dev/null > /var/log/nginx/access.log"),
+        ("Clear Nginx error log", "cat /dev/null > /var/log/nginx/error.log"),
+        ("Remove IP from Apache log", "sed -i '/{ip}/d' /var/log/apache2/access.log"),
+        ("Remove IP from Nginx log", "sed -i '/{ip}/d' /var/log/nginx/access.log"),
+        ("Clear IIS logs", "del /F /Q C:\\inetpub\\logs\\LogFiles\\W3SVC1\\*"),
+    ],
+    "ssh": [
+        ("Remove host from known_hosts", "ssh-keygen -R {host}"),
+        ("Clear all known_hosts", "cat /dev/null > ~/.ssh/known_hosts"),
+        ("Clear SSH agent keys", "ssh-add -D"),
+        ("Remove authorized key you added", "sed -i '/{key_identifier}/d' ~/.ssh/authorized_keys"),
+        ("Clear SSH logs", "cat /dev/null > /var/log/auth.log"),
+    ],
+    "network": [
+        ("Flush ARP cache (Linux)", "ip -s -s neigh flush all"),
+        ("Flush ARP cache (macOS)", "sudo arp -d -a"),
+        ("Flush DNS cache (Linux)", "systemd-resolve --flush-caches"),
+        ("Flush DNS cache (macOS)", "sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder"),
+        ("Flush DNS cache (Windows)", "ipconfig /flushdns"),
+        ("Remove iptables rules", "iptables -F && iptables -X"),
+        ("Remove pf rules (macOS)", "sudo pfctl -F all"),
+        ("Kill background connections", "kill $(lsof -t -i @{ip}) 2>/dev/null"),
+    ],
+}

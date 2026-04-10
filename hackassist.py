@@ -19,7 +19,7 @@ from ui import (console, show_banner, show_disclaimer, show_menu,
                 show_stage_header, info, success, warning, error)
 from session import get_session_menu
 from tool_manager import show_manager_menu
-from stages import recon, scanning, enumeration, exploitation, post_exploit, reporting
+from stages import recon, scanning, enumeration, exploitation, post_exploit, reporting, footprint_erasure
 import auto_attack
 import defender
 
@@ -66,6 +66,7 @@ def main():
                 ("8", "[bold]Session[/bold]         - Manage engagement sessions"),
                 ("9", "[bold red]Auto Attack[/bold red]    - AI autonomous attack pipeline"),
                 ("10", "[bold green]Defense[/bold green]        - Autonomous system protection"),
+                ("11", "[bold red]Footprint Erasure[/bold red] - Cover tracks & self-destruct"),
                 ("0", "Exit"),
             ]
             choice = show_menu(options)
@@ -100,6 +101,8 @@ def main():
                     session = result_session
             elif choice == "10":
                 defender.run(session)
+            elif choice == "11":
+                footprint_erasure.run(session)
 
     except KeyboardInterrupt:
         console.print("\n\n[bold yellow]Interrupted. Exiting HackAssist...[/bold yellow]\n")
