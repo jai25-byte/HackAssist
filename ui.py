@@ -75,13 +75,15 @@ def show_menu(options):
         The key string of the selected option.
     """
     for key, label in options:
-        if key == "0":
+        if key == "":
+            console.print(f"\n  {label}")
+        elif key == "0":
             console.print(f"  [dim]{key}.[/dim] [dim]{label}[/dim]")
         else:
             console.print(f"  [bold yellow]{key}.[/bold yellow] {label}")
     console.print()
 
-    valid_keys = [k for k, _ in options]
+    valid_keys = [k for k, _ in options if k != ""]
     while True:
         choice = Prompt.ask("[bold green]Select option[/bold green]")
         if choice in valid_keys:
