@@ -1,0 +1,39 @@
+{
+  "known_safe_ips": [],
+  "known_safe_ports": [],
+  "known_safe_processes": [
+    "code",
+    "syslogd",
+    "WindowServer",
+    "loginwindow",
+    "launchd",
+    "git",
+    "Finder",
+    "iTerm2",
+    "SystemUIServer",
+    "Terminal",
+    "node",
+    "python3",
+    "mds_stores",
+    "Dock",
+    "Spotlight",
+    "brew",
+    "kernel_task"
+  ],
+  "threat_history": [],
+  "blocked_ips": [],
+  "false_positives": [],
+  "baseline_hashes": {
+    "/etc/hosts": "c7dd0e2ed261ce76d76f852596c5b54026b9a894fa481381ffd399b556c0e2da",
+    "/etc/passwd": "5676bbb620dfd6c54c49e86831ea2577aa8d9cbc7e6ad5ea1f6848e9bc4f69fa",
+    "/etc/ssh/sshd_config": "9cf76940a40c7b3db663d5587a48f28217d3058196c36c4eeb09765533e04cec",
+    "/Users/jayesh/.zshrc": "362a6a3ca94efe375263c471b453e354a64f8d2a835a6d15d69e35b6ede64655"
+  },
+  "learned_patterns": [],
+  "stats": {
+    "threats_detected": 0,
+    "threats_blocked": 0,
+    "false_positives": 0,
+    "uptime_hours": 0
+  }
+}
