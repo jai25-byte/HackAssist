@@ -11,7 +11,7 @@ from rich.markdown import Markdown
 
 console = Console()
 
-BANNER = r"""
+BANNER_IDLE = r"""
     __  __           __   ___              _      __
    / / / /___ ______/ /__/   |  __________(_)____/ /_
   / /_/ / __ `/ ___/ //_/ /| | / ___/ ___/ / ___/ __/
@@ -19,16 +19,42 @@ BANNER = r"""
 /_/ /_/\__,_/\___/_/|_/_/  |_/____/____/_/____/\__/
 """
 
-VERSION = "v1.0.0"
+BANNER_ACTIVE = r"""
+🔥 __  __           __   ___              _      __ 🔥
+🔥/ / / /___ ______/ /__/   |  __________(_)____/ /_🔥
+🔥/ /_/ / __ `/ ___/ //_/ /| | / ___/ ___/ / ___/ __/🔥
+🔥/ __  / /_/ / /__/ ,< / ___ |(__  |__  ) (__  ) /_ 🔥
+🔥/_/ /_/\__,_/\___/_/|_/_/  |_/____/____/_/____/\__/🔥
+"""
 
+VERSION = "v1.5.0-Mega"
 
-def show_banner():
-    banner_text = Text(BANNER, style="bold green")
+# Theme definitions
+THEMES = {
+    "default": {"primary": "green", "secondary": "cyan", "alert": "red", "warn": "yellow", "info": "blue"},
+    "matrix": {"primary": "green", "secondary": "green", "alert": "bright_green", "warn": "green", "info": "green"},
+    "cyberpunk": {"primary": "magenta", "secondary": "cyan", "alert": "bright_red", "warn": "yellow", "info": "bright_blue"},
+    "dracula": {"primary": "magenta", "secondary": "cyan", "alert": "red", "warn": "yellow", "info": "green"}
+}
+CURRENT_THEME = "default"
+
+def set_theme(theme_name):
+    global CURRENT_THEME
+    if theme_name in THEMES:
+        CURRENT_THEME = theme_name
+
+def get_color(color_type):
+    return THEMES[CURRENT_THEME][color_type]
+
+def show_banner(threat_level="low"):
+    banner = BANNER_ACTIVE if threat_level == "high" else BANNER_IDLE
+    banner_text = Text(banner, style=f"bold {get_color('primary')}")
     console.print(Panel(
         banner_text,
-        subtitle=f"[cyan]{VERSION}[/cyan] | Terminal Hacking Assistant",
-        border_style="green",
+        subtitle=f"[{get_color('secondary')}]{VERSION}[/{get_color('secondary')}] | Terminal Hacking Assistant",
+        border_style=get_color('primary'),
     ))
+
 
 
 def show_disclaimer():
@@ -60,8 +86,8 @@ def show_stage_header(title, description):
     console.print()
     console.print(Panel(
         f"[bold white]{description}[/bold white]",
-        title=f"[bold cyan]{title}[/bold cyan]",
-        border_style="cyan",
+        title=f"[bold {get_color('secondary')}]{title}[/bold {get_color('secondary')}]",
+        border_style=get_color('secondary'),
     ))
     console.print()
 
@@ -121,25 +147,21 @@ def show_command_preview(cmd):
 
 
 def success(msg):
-    console.print(f"[bold green][+][/bold green] {msg}")
-
+    console.print(f"[bold {get_color('primary')}][+][/bold {get_color('primary')}] {msg}")
 
 def error(msg):
-    console.print(f"[bold red][-][/bold red] {msg}")
-
+    console.print(f"[bold {get_color('alert')}][-][/bold {get_color('alert')}] {msg}")
 
 def warning(msg):
-    console.print(f"[bold yellow][!][/bold yellow] {msg}")
-
+    console.print(f"[bold {get_color('warn')}][!][/bold {get_color('warn')}] {msg}")
 
 def info(msg):
-    console.print(f"[bold blue][*][/bold blue] {msg}")
-
+    console.print(f"[bold {get_color('info')}][*][/bold {get_color('info')}] {msg}")
 
 def ask(prompt, default=None):
     if default:
-        return Prompt.ask(f"[bold green]{prompt}[/bold green]", default=default)
-    return Prompt.ask(f"[bold green]{prompt}[/bold green]")
+        return Prompt.ask(f"[bold {get_color('primary')}]{prompt}[/bold {get_color('primary')}]", default=default)
+    return Prompt.ask(f"[bold {get_color('primary')}]{prompt}[/bold {get_color('primary')}]")
 
 
 def confirm(prompt, default=True):

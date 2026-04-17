@@ -10,6 +10,8 @@ import json
 import shutil
 import subprocess
 from datetime import datetime
+import urllib.request
+import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -19,12 +21,30 @@ from executor import run_command, run_with_preview
 
 # ─── Ollama Interface ─────────────────────────────────────────────────────────
 
+API_CONFIG_FILE = os.path.expanduser("~/hackassist_sessions/api_keys.json")
+
+def _load_api_keys():
+    if os.path.exists(API_CONFIG_FILE):
+        with open(API_CONFIG_FILE, "r") as f:
+            return json.load(f)
+    return {"openai": "", "anthropic": "", "gemini": ""}
+
+def _save_api_keys(keys):
+    os.makedirs(os.path.dirname(API_CONFIG_FILE), exist_ok=True)
+    with open(API_CONFIG_FILE, "w") as f:
+        json.dump(keys, f)
+
 OLLAMA_MODELS = [
     ("llama3.2", "Fast, 3B params — good for quick analysis"),
     ("llama3.1", "Strong 8B model — great balance of speed and quality"),
     ("mistral", "7B model — excellent at code and security analysis"),
     ("codellama", "Specialized for code — great for exploit analysis"),
-    ("phi3", "Microsoft's 3.8B — fast and capable"),
+]
+
+API_MODELS = [
+    ("gpt-4o", "OpenAI GPT-4o (requires API key)"),
+    ("claude-3-5-sonnet-20240620", "Anthropic Claude 3.5 Sonnet (requires API key)"),
+    ("gemini-1.5-pro", "Google Gemini 1.5 Pro (requires API key)"),
 ]
 
 SYSTEM_PROMPT = """You are HackAssist AI — an expert penetration testing assistant.
@@ -131,8 +151,61 @@ def _get_installed_models():
     return []
 
 
+def _ask_api(prompt, model, context=None):
+    """Fallback handler to ask commercial APIs."""
+    keys = _load_api_keys()
+    full_prompt = f"Context:\n{context}\n\nQuestion: {prompt}" if context else prompt
+    sys_prompt = SYSTEM_PROMPT
+
+    if "gpt" in model:
+        key = keys.get("openai")
+        if not key: return "Error: OpenAI API key not configured. Setup in AI Settings."
+        try:
+            req = urllib.request.Request("https://api.openai.com/v1/chat/completions",
+                data=json.dumps({"model": model, "messages": [
+                    {"role": "system", "content": sys_prompt},
+                    {"role": "user", "content": full_prompt}
+                ]}).encode(),
+                headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"})
+            resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
+            return resp["choices"][0]["message"]["content"]
+        except Exception as e: return f"OpenAI Error: {e}"
+
+    if "claude" in model:
+        key = keys.get("anthropic")
+        if not key: return "Error: Anthropic API key not configured. Setup in AI Settings."
+        try:
+            req = urllib.request.Request("https://api.anthropic.com/v1/messages",
+                data=json.dumps({
+                    "model": model, "max_tokens": 4096, "system": sys_prompt,
+                    "messages": [{"role": "user", "content": full_prompt}]
+                }).encode(),
+                headers={"x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"})
+            resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
+            return resp["content"][0]["text"]
+        except Exception as e: return f"Anthropic Error: {e}"
+
+    if "gemini" in model:
+        key = keys.get("gemini")
+        if not key: return "Error: Gemini API key not configured. Setup in AI Settings."
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
+            req = urllib.request.Request(url, data=json.dumps({
+                "systemInstruction": {"parts": [{"text": sys_prompt}]},
+                "contents": [{"parts": [{"text": full_prompt}]}]
+            }).encode(), headers={"Content-Type": "application/json"})
+            resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
+            return resp["candidates"][0]["content"]["parts"][0]["text"]
+        except Exception as e: return f"Gemini Error: {e}"
+        
+    return "Unknown model."
+
+
 def _ask_ollama(prompt, model="llama3.2", context=None):
-    """Send a prompt to Ollama and stream the response."""
+    """Send a prompt to Ollama or API and stream the response."""
+    if model in [m[0] for m in API_MODELS]:
+        return _ask_api(prompt, model, context)
+
     full_prompt = prompt
     if context:
         full_prompt = f"Context:\n{context}\n\nQuestion: {prompt}"
@@ -146,18 +219,15 @@ def _ask_ollama(prompt, model="llama3.2", context=None):
             text=True,
         )
 
-        # Send the prompt with system context
         input_text = f"{SYSTEM_PROMPT}\n\n{full_prompt}"
         stdout, stderr = process.communicate(input=input_text, timeout=120)
 
         return stdout.strip() if stdout else "No response from model."
-
     except subprocess.TimeoutExpired:
         process.kill()
         return "Model timed out. Try a smaller model or simpler query."
     except Exception as e:
         return f"Error communicating with Ollama: {e}"
-
 
 # ─── Analysis Functions ──────────────────────────────────────────────────────
 
@@ -266,6 +336,13 @@ def _interactive_chat(model, session, persona=None):
     console.print(f"[dim]{persona['desc']}[/dim]")
     console.print("[dim]Commands: 'exit' quit | '/persona' switch | '/clear' reset[/dim]")
 
+    # Persistent AI memory context
+    MEMORY_FILE = os.path.expanduser(f"~/hackassist_sessions/ai_memory_{persona['name'].replace(' ', '_')}.txt")
+    mem_context = ""
+    if os.path.exists(MEMORY_FILE):
+        with open(MEMORY_FILE, "r") as f:
+            mem_context = f.read()[-3000:] # Keeping last 3000 chars
+
     # Build context from session
     context = ""
     if session:
@@ -298,14 +375,18 @@ def _interactive_chat(model, session, persona=None):
             continue
         if user_input == '/clear':
             context = ""
-            console.print("[dim]Context cleared.[/dim]")
+            mem_context = ""
+            if os.path.exists(MEMORY_FILE): os.remove(MEMORY_FILE)
+            console.print("[dim]Context & memory cleared.[/dim]")
             continue
 
         info("Thinking...")
         # Use persona system prompt
         full_prompt = f"{chat_system}\n\n"
         if context:
-            full_prompt += f"Context:\n{context}\n\n"
+            full_prompt += f"Session Context:\n{context}\n\n"
+        if mem_context:
+            full_prompt += f"Recent Conversation Memory:\n{mem_context}\n\n"
         full_prompt += f"User: {user_input}"
 
         try:
@@ -325,8 +406,12 @@ def _interactive_chat(model, session, persona=None):
             response = f"Error: {e}"
 
         console.print(f"\n[bold green]{persona['name']}:[/bold green] {response}")
-        context += f"\nUser: {user_input}\n{persona['name']}: {response}\n"
-
+        
+        mem_addition = f"\nUser: {user_input}\n{persona['name']}: {response}\n"
+        context += mem_addition
+        mem_context += mem_addition
+        with open(MEMORY_FILE, "a") as f:
+            f.write(mem_addition)
 
 # ─── Paste & Analyze ─────────────────────────────────────────────────────────
 
@@ -422,7 +507,10 @@ def run(session):
         installed = [model_name]
 
     # Select model
-    if len(installed) == 1:
+    if len(installed) == 0:
+        info("No local models installed. Proceeding to Model Switcher so you can set up API keys.")
+        model = "gpt-4o"
+    elif len(installed) == 1:
         model = installed[0]
     else:
         console.print("\n[bold]Installed models:[/bold]")
@@ -433,7 +521,8 @@ def run(session):
             return
         model = installed[int(choice) - 1]
 
-    success(f"Using model: {model}")
+    if installed:
+        success(f"Default model: {model}")
 
     active_persona = AI_PERSONAS['HackAssist']
 
@@ -447,8 +536,8 @@ def run(session):
             ("4", "Generate AI Report Summary"),
             ("5", "Suggest Next Steps"),
             ("6", "Explain an Exploit"),
-            ("7", "[bold]Switch Persona[/bold] (RedTeam/BugHunter/Forensics/...)"),
-            ("8", "Switch Model"),
+            ("7", "[bold]Switch Persona[/bold] (RedTeam/BugHunter/Forensics/... )"),
+            ("8", "Switch Backend Model / Manage API Keys"),
             ("0", "Back to Main Menu"),
         ]
         choice = show_menu(options)
@@ -488,9 +577,36 @@ def run(session):
         elif choice == "7":
             active_persona = _select_persona()
         elif choice == "8":
-            installed = _get_installed_models()
-            if installed:
-                model_options = [(str(i+1), m) for i, m in enumerate(installed)]
-                choice = show_menu(model_options)
-                model = installed[int(choice) - 1]
-                success(f"Switched to: {model}")
+            console.print("\n[bold cyan]Model & API Key Selection[/bold cyan]\n")
+            m_opts = [(str(i+1), m) for i, m in enumerate(installed)]
+            
+            console.print("[bold yellow]Local Models (Ollama):[/bold yellow]")
+            for opt in m_opts:
+                console.print(f"  {opt[0]}. {opt[1]}")
+                
+            offset = len(installed)
+            console.print("\n[bold yellow]Cloud Models (API):[/bold yellow]")
+            a_opts = [(str(offset+i+1), m[0], m[1]) for i, m in enumerate(API_MODELS)]
+            for opt in a_opts:
+                console.print(f"  {opt[0]}. {opt[1]} — [dim]{opt[2]}[/dim]")
+            
+            console.print("\n  [dim]K. Manage API Keys[/dim]")    
+            
+            mc = ask("\nSelect model or 'K' for keys")
+            if mc.lower() == 'k':
+                keys = _load_api_keys()
+                keys["openai"] = ask("OpenAI API Key", default=keys.get("openai"))
+                keys["anthropic"] = ask("Anthropic API Key", default=keys.get("anthropic"))
+                keys["gemini"] = ask("Gemini API Key", default=keys.get("gemini"))
+                _save_api_keys(keys)
+                success("Keys saved!")
+            else:
+                try:
+                    idx = int(mc) - 1
+                    if idx < offset:
+                        model = installed[idx]
+                    else:
+                        model = API_MODELS[idx - offset][0]
+                    success(f"Model switched to {model}")
+                except (ValueError, IndexError):
+                    pass

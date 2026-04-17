@@ -110,8 +110,9 @@ def main():
                 # ── DASHBOARD & INTEL ──
                 ("", "[bold white]── DASHBOARD & INTEL ──[/bold white]"),
                 ("12", "[bold]Dashboard[/bold]          — Live visual target dashboard"),
-                ("13", "[bold]MITRE ATT&CK Wiki[/bold] — Technique browser with examples"),
-                ("14", "[bold]Threat Intel[/bold]       — IOC lookup, log analysis, elite tools"),
+                ("13", "[bold]Web Dashboard[/bold]      — Flask-based web interface"),
+                ("14", "[bold]MITRE ATT&CK Wiki[/bold] — Technique browser with examples"),
+                ("15", "[bold]Threat Intel[/bold]       — IOC lookup, log analysis, elite tools"),
 
                 # ── ARSENAL ──
                 ("", "[bold white]── ARSENAL ──[/bold white]"),
@@ -233,8 +234,17 @@ def main():
             elif choice == "12":
                 dashboard.run(session)
             elif choice == "13":
-                technique_wiki.run(session)
+                console.print("\n[bold cyan]Launching Web Dashboard...[/bold cyan]")
+                console.print("Access it at: [bold]http://localhost:8080[/bold]")
+                try:
+                    import subprocess
+                    subprocess.Popen([sys.executable, "web_ui.py"])
+                    _ = ask("Web UI is running in background. Press Enter to return")
+                except Exception as e:
+                    error(f"Failed to start: {e}")
             elif choice == "14":
+                technique_wiki.run(session)
+            elif choice == "15":
                 elite_arsenal.run(session)
 
             # ── Arsenal ──

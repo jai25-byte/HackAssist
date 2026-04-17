@@ -131,12 +131,49 @@ class TargetDashboard:
             content = "\n".join(lines)
         return Panel(content, title="Findings", border_style="yellow")
 
+    def _build_kill_chain(self):
+        steps = ["Recon", "Weaponize", "Delivery", "Exploit", "Install", "C2", "Actions"]
+        
+        # Simple heuristic to determine stage from commands/findings
+        current_step = 0
+        if self.data['commands_run'] > 5: current_step = 3
+        if len(self.data.get('vulns', [])) > 0: current_step = 4
+        if self.data['commands_run'] > 20: current_step = 6
+        
+        colored_steps = []
+        for i, step in enumerate(steps):
+            if i < current_step:
+                colored_steps.append(f"[bold green]✓ {step}[/bold green]")
+            elif i == current_step:
+                colored_steps.append(f"[bold yellow]► {step}[/bold yellow]")
+            else:
+                colored_steps.append(f"[dim]{step}[/dim]")
+                
+        content = " ⟶ ".join(colored_steps)
+        return Panel(content, title="Kill Chain Map", border_style="magenta")
+
+    def _build_event_pipeline(self):
+        # Merge commands, vulnerabilities, etc into a simulated real-time event stream
+        events = []
+        for i in range(min(5, self.data['commands_run'])):
+            events.append(f"[dim]sys[/dim] | Command execution #{self.data['commands_run'] - i}")
+        
+        for vuln in self.data['vulns'][-3:]:
+             events.append(f"[red]ALERT[/red] | Vuln: {vuln.get('name', '?')}")
+             
+        if not events:
+            return Panel("[dim]No events yet...[/dim]", title="Event Pipeline", border_style="blue")
+            
+        content = "\n".join(events[:6])
+        return Panel(content, title="Event Pipeline", border_style="blue")
+
     def _build_layout(self):
         layout = Layout()
         layout.split_column(
             Layout(self._build_header(), size=3, name="header"),
+            Layout(self._build_kill_chain(), size=3, name="killchain"),
             Layout(name="body"),
-            Layout(self._build_findings_panel(), size=14, name="footer"),
+            Layout(name="footer", size=10),
         )
         layout["body"].split_row(
             Layout(self._build_ports_table(), name="left"),
@@ -145,6 +182,10 @@ class TargetDashboard:
         layout["right"].split_column(
             Layout(self._build_vulns_table(), name="vulns"),
             Layout(self._build_subdomains_panel(), name="subs"),
+        )
+        layout["footer"].split_row(
+            Layout(self._build_findings_panel(), name="findings"),
+            Layout(self._build_event_pipeline(), name="events")
         )
         return layout
 
@@ -228,7 +269,7 @@ def run(session):
         console.print("\n[bold green]TARGET DASHBOARD[/bold green]\n")
         options = [
             ("1", "Live Dashboard (auto-refresh)"),
-            ("2", "Static Snapshot"),
+            ("2", "Static Snapshot (Kill chain + Event Stream)"),
             ("3", "Quick Scan & Visualize"),
             ("4", "Add Port Manually"),
             ("5", "Add Vulnerability Manually"),

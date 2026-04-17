@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HackAssist Global Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dark-glass.css">
+</head>
+<body>
+    <div class="background-anim"></div>
+    <div class="sidebar">
+        <div class="logo">HackAssist<span class="pulse"></span></div>
+        <ul class="nav" id="session-list">
+            <li class="loading">Loading sessions...</li>
+        </ul>
+    </div>
+    
+    <div class="main-content">
+        <header>
+            <h1 id="header-title">Overview</h1>
+            <div class="stats-bar" id="global-stats">
+                <div class="stat"><span class="label">Sessions</span><span class="val" id="g-sessions">0</span></div>
+                <div class="stat"><span class="label">Total Vulns</span><span class="val text-danger" id="g-vulns">0</span></div>
+            </div>
+        </header>
+
+        <div class="dashboard-grid" id="dashboard-grid">
+            <!-- Dynamic Content goes here -->
+            <div class="glass-card full-width welcome-card">
+                <h2>Welcome to HackAssist Web</h2>
+                <p>Select a session from the sidebar to view detailed intelligence, vulnerability reports, and command logs.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchSessions() {
+            const res = await fetch('/api/sessions');
+            const sessions = await res.json();
+            
+            const list = document.getElementById('session-list');
+            list.innerHTML = '';
+            
+            let totalVulns = 0;
+
+            sessions.forEach(s => {
+                totalVulns += s.findings;
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <div class="session-nav-item" onclick="loadSession('${s.id}')">
+                        <div class="target-name">${s.target} <span class="id-dim">#${s.id.substring(0,6)}</span></div>
+                        <div class="badges">
+                            ${s.critical > 0 ? `<span class="badge cri">${s.critical}</span>` : ''}
+                            ${s.high > 0 ? `<span class="badge high">${s.high}</span>` : ''}
+                            ${s.medium > 0 ? `<span class="badge med">${s.medium}</span>` : ''}
+                        </div>
+                    </div>
+                `;
+                list.appendChild(li);
+            });
+
+            document.getElementById('g-sessions').innerText = sessions.length;
+            document.getElementById('g-vulns').innerText = totalVulns;
+        }
+
+        async function loadSession(id) {
+            const res = await fetch(`/api/sessions/${id}`);
+            const data = await res.json();
+            
+            document.getElementById('header-title').innerText = `Session Report`;
+            const grid = document.getElementById('dashboard-grid');
+            
+            let findingsHTML = data.findings.map(f => `
+                <div class="finding-item sev-${f.severity?.toLowerCase()}">
+                    <h4>[${f.severity?.toUpperCase()}] ${f.title}</h4>
+                    <pre><code>${f.data}</code></pre>
+                </div>
+            `).join('');
+
+            if(data.findings.length === 0) findingsHTML = "<p class='dim'>No findings yet.</p>";
+
+            let cmdsHTML = data.commands.map(c => `<li>${c}</li>`).join('');
+
+            grid.innerHTML = `
+                <div class="glass-card wide-card">
+                    <h3>Vulnerabilities & Findings</h3>
+                    <div class="findings-list">
+                        ${findingsHTML}
+                    </div>
+                </div>
+                <div class="glass-card narrow-card">
+                    <h3>Command Stream</h3>
+                    <ul class="cmd-list terminal-font">
+                        ${cmdsHTML}
+                    </ul>
+                </div>
+            `;
+        }
+
+        fetchSessions();
+        setInterval(fetchSessions, 10000); // refresh 10s
+    </script>
+</body>
+</html>
